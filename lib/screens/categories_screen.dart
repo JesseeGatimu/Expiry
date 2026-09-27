@@ -1,0 +1,189 @@
+import 'package:flutter/material.dart';
+
+import '../data/app_data.dart';
+import '../models/category.dart';
+
+class CategoriesScreen extends StatefulWidget {
+  const CategoriesScreen({super.key});
+
+  @override
+  State<CategoriesScreen> createState() => _CategoriesScreenState();
+}
+
+class _CategoriesScreenState extends State<CategoriesScreen> {
+  List<Category> get categories => AppData.categories;
+
+  void _showCategoryDialog({Category? category}) {
+    final TextEditingController nameController = TextEditingController(
+      text: category?.name ?? '',
+    );
+
+    final TextEditingController daysController = TextEditingController(
+      text: category?.removalDays.toString() ?? '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(category == null ? 'Add Category' : 'Edit Category'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Category name',
+                  hintText: 'e.g. Fresh Juice',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              TextField(
+                controller: daysController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Remove before expiry',
+                  hintText: 'Number of days',
+                  suffixText: 'days',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('Cancel'),
+            ),
+
+            FilledButton(
+              onPressed: () {
+                final String name = nameController.text.trim();
+
+                final int? days = int.tryParse(daysController.text.trim());
+
+                if (name.isEmpty || days == null || days < 0) {
+                  return;
+                }
+
+                setState(() {
+                  if (category == null) {
+                    categories.add(Category(name: name, removalDays: days));
+                  } else {
+                    category.name = name;
+                    category.removalDays = days;
+                  }
+                });
+
+                Navigator.pop(context);
+              },
+              child: Text(category == null ? 'Add' : 'Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _deleteCategory(Category category) {
+    setState(() {
+      categories.remove(category);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Categories',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            'Shelf removal rules',
+            style: TextStyle(fontSize: 15, color: Colors.grey.shade600),
+          ),
+
+          const SizedBox(height: 20),
+
+          ...categories.map((category) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Card(
+                elevation: 0,
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+
+                  leading: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      Icons.category_outlined,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+
+                  title: Text(
+                    category.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+
+                  subtitle: Text(
+                    'Remove '
+                    '${category.removalDays} '
+                    '${category.removalDays == 1 ? 'day' : 'days'} '
+                    'before expiry',
+                  ),
+
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        _showCategoryDialog(category: category);
+                      }
+
+                      if (value == 'delete') {
+                        _deleteCategory(category);
+                      }
+                    },
+                    itemBuilder: (context) {
+                      return const [
+                        PopupMenuItem(value: 'edit', child: Text('Edit')),
+                        PopupMenuItem(value: 'delete', child: Text('Delete')),
+                      ];
+                    },
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          _showCategoryDialog();
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('Add Category'),
+      ),
+    );
+  }
+}
