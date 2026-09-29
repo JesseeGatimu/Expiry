@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'data/app_data.dart';
 import 'models/product.dart';
 import 'screens/add_product_screen.dart';
 import 'screens/categories_screen.dart';
 import 'screens/products_screen.dart';
+import 'screens/shop_setup_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: const String.fromEnvironment('SUPABASE_URL'),
+    anonKey: const String.fromEnvironment('SUPABASE_ANON_KEY'),
+  );
   runApp(const ExpiryTrackerApp());
 }
 
@@ -23,9 +30,44 @@ class ExpiryTrackerApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         scaffoldBackgroundColor: const Color(0xFFF7F8FC),
       ),
-      home: const DashboardScreen(),
+      home: const _StartupScreen(),
     );
   }
+}
+
+class _StartupScreen extends StatefulWidget {
+  const _StartupScreen();
+  @override
+  State<_StartupScreen> createState() => _StartupScreenState();
+}
+
+class _StartupScreenState extends State<_StartupScreen> {
+  late final Future<bool> _ready = AppData.load();
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<bool>(
+    future: _ready,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState != ConnectionState.done) {
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+      if (snapshot.hasError) {
+        return Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Could not connect to Supabase. Check the app configuration and enable Anonymous sign-ins.\n\n${snapshot.error}',
+              ),
+            ),
+          ),
+        );
+      }
+      return snapshot.data == true
+          ? const DashboardScreen()
+          : const ShopSetupScreen();
+    },
+  );
 }
 
 class DashboardScreen extends StatefulWidget {
@@ -46,27 +88,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
 
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
+    if (product == null) return;
 
-    if (product == null) {
-      return;
+    try {
+      await AppData.addProduct(product);
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not add product: $error')),
+        );
+      }
     }
-
-    setState(() {
-      AppData.products.add(product);
-    });
   }
 
   Future<void> _openProducts() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) {
-          return const ProductsScreen();
-        },
-      ),
+      MaterialPageRoute(builder: (context) => const ProductsScreen()),
     );
     if (mounted) setState(() {});
   }
@@ -74,11 +114,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _openCategories() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) {
-          return const CategoriesScreen();
-        },
-      ),
+      MaterialPageRoute(builder: (context) => const CategoriesScreen()),
     );
     if (mounted) setState(() {});
   }
@@ -91,7 +127,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   bool _isToday(DateTime date) {
     final DateTime today = DateTime.now();
-
     return date.year == today.year &&
         date.month == today.month &&
         date.day == today.day;
@@ -99,90 +134,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _removalLabel(DateTime date) {
     final DateTime today = DateTime.now();
-
     final DateTime todayOnly = DateTime(today.year, today.month, today.day);
-
     final DateTime dateOnly = DateTime(date.year, date.month, date.day);
-
     final int difference = dateOnly.difference(todayOnly).inDays;
 
-    if (difference == 0) {
-      return 'Today';
-    }
-
-    if (difference == 1) {
-      return 'Tomorrow';
-    }
-
-    if (difference > 1) {
-      return '$difference days';
-    }
-
+    if (difference == 0) return 'Today';
+    if (difference == 1) return 'Tomorrow';
+    if (difference > 1) return '$difference days';
     return 'Overdue';
   }
 
   int _countProductsForRemovalToday() {
-    final DateTime today = DateTime.now();
-    final DateTime todayOnly = DateTime(today.year, today.month, today.day);
-    return AppData.products.where((product) {
+    final DateTime now = DateTime.now();
+    final DateTime todayOnly = DateTime(now.year, now.month, now.day);
+    return AppData.activeProducts.where((product) {
       final DateTime removalDate = DateTime(
         product.currentRemovalDate.year,
         product.currentRemovalDate.month,
         product.currentRemovalDate.day,
       );
-      return product.status == ProductStatus.active &&
-          !removalDate.isAfter(todayOnly);
+      return !removalDate.isAfter(todayOnly);
     }).length;
   }
 
-  void _updateExpiredProducts() {
-    final DateTime today = DateTime.now();
-    final DateTime todayOnly = DateTime(today.year, today.month, today.day);
-    for (final Product product in AppData.products) {
-      final DateTime expiryDate = DateTime(
-        product.expiryDate.year,
-        product.expiryDate.month,
-        product.expiryDate.day,
-      );
-      if (product.status == ProductStatus.active &&
-          expiryDate.isBefore(todayOnly)) {
-        product.status = ProductStatus.expired;
-      }
-    }
-  }
-
-  int _countActiveProducts() {
-    return AppData.products.where((product) {
-      return product.status == ProductStatus.active;
-    }).length;
-  }
-
-  int _countSoldProducts() {
-    return AppData.products.where((product) {
-      return product.status == ProductStatus.sold;
-    }).length;
-  }
-
-  int _countRemovedProducts() {
-    return AppData.products.where((product) {
-      return product.status == ProductStatus.removed;
-    }).length;
-  }
-
-  int _countExpiredProducts() {
-    return AppData.products.where((product) {
-      return product.status == ProductStatus.expired;
-    }).length;
-  }
+  int _countActiveProducts() => AppData.activeProducts.length;
+  int _countSoldProducts() => AppData.soldProducts.length;
+  int _countRemovedProducts() => AppData.removedProducts.length;
+  int _countExpiredProducts() => AppData.expiredProducts.length;
 
   @override
   Widget build(BuildContext context) {
-    _updateExpiredProducts();
     final int removeTodayCount = _countProductsForRemovalToday();
-
-    final List<Product> activeProducts = AppData.products.where((product) {
-      return product.status == ProductStatus.active;
-    }).toList();
+    final List<Product> activeProducts = AppData.activeProducts;
 
     return Scaffold(
       appBar: AppBar(
@@ -265,8 +248,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Text(
                           removeTodayCount == 0
                               ? 'Nothing needs to be removed today.'
-                              : 'Check these products before '
-                                    'they expire.',
+                              : 'Check these products before they expire.',
                           style: TextStyle(
                             color: Colors.grey.shade700,
                             fontSize: 13,
@@ -309,8 +291,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      'Add a product to start tracking '
-                      'its shelf removal date.',
+                      'Add a product to start tracking its shelf removal date.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.grey.shade600),
                     ),
@@ -319,7 +300,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ...activeProducts.map((product) {
               final bool isToday = _isToday(product.currentRemovalDate);
-
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _ProductCard(
@@ -393,13 +373,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: 0,
         onDestinationSelected: (index) {
-          if (index == 1) {
-            _openProducts();
-          }
-
-          if (index == 2) {
-            _openCategories();
-          }
+          if (index == 1) _openProducts();
+          if (index == 2) _openCategories();
         },
         destinations: const [
           NavigationDestination(

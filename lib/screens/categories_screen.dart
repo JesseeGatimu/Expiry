@@ -63,25 +63,33 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             ),
 
             FilledButton(
-              onPressed: () {
-                final String name = nameController.text.trim();
-
-                final int? days = int.tryParse(daysController.text.trim());
-
-                if (name.isEmpty || days == null || days < 0) {
-                  return;
-                }
-
-                setState(() {
-                  if (category == null) {
-                    categories.add(Category(name: name, removalDays: days));
-                  } else {
-                    category.name = name;
-                    category.removalDays = days;
+              onPressed: () async {
+                final name = nameController.text.trim();
+                final days = int.tryParse(daysController.text.trim());
+                if (name.isEmpty || days == null || days < 0) return;
+                try {
+                  await AppData.saveCategory(
+                    category == null
+                        ? Category(name: name, removalDays: days)
+                        : Category(
+                            id: category.id,
+                            name: name,
+                            removalDays: days,
+                          ),
+                  );
+                  if (context.mounted) {
+                    setState(() {});
+                    Navigator.pop(context);
                   }
-                });
-
-                Navigator.pop(context);
+                } catch (error) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Could not save category: $error'),
+                      ),
+                    );
+                  }
+                }
               },
               child: Text(category == null ? 'Add' : 'Save'),
             ),
@@ -91,10 +99,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     );
   }
 
-  void _deleteCategory(Category category) {
-    setState(() {
-      categories.remove(category);
-    });
+  Future<void> _deleteCategory(Category category) async {
+    try {
+      await AppData.deleteCategory(category);
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete category: $error')),
+        );
+      }
+    }
   }
 
   @override

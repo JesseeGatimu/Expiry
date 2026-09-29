@@ -136,24 +136,28 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }
   }
 
-  void _markAsSold(Product product) {
-    setState(() {
-      product.status = ProductStatus.sold;
-    });
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('${product.name} marked as sold.')));
+  Future<void> _markAsSold(Product product) async {
+    try {
+      await AppData.updateProduct(product, ProductStatus.sold);
+      if (mounted) {
+        setState(() {});
+        _showMessage('${product.name} marked as sold.');
+      }
+    } catch (error) {
+      _showMessage('Could not update product: $error');
+    }
   }
 
-  void _markAsRemoved(Product product) {
-    setState(() {
-      product.status = ProductStatus.removed;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${product.name} marked as removed.')),
-    );
+  Future<void> _markAsRemoved(Product product) async {
+    try {
+      await AppData.updateProduct(product, ProductStatus.removed);
+      if (mounted) {
+        setState(() {});
+        _showMessage('${product.name} marked as removed.');
+      }
+    } catch (error) {
+      _showMessage('Could not update product: $error');
+    }
   }
 
   Future<void> _showExtendDialog(Product product) async {
@@ -228,15 +232,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
     );
 
     if (!mounted || extraDays == null) return;
-    setState(() {
-      product.currentRemovalDate = product.currentRemovalDate.add(
-        Duration(days: extraDays),
-      );
-      product.extensionDays += extraDays;
-    });
-    _showMessage(
-      'Removal date extended to ${_formatDate(product.currentRemovalDate)}.',
-    );
+    try {
+      await AppData.extendProduct(product, extraDays);
+      if (mounted) {
+        setState(() {});
+        _showMessage('Removal date extended successfully.');
+      }
+    } catch (error) {
+      _showMessage('Could not extend product: $error');
+    }
   }
 
   void _showMessage(String message) {
