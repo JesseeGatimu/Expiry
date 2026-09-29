@@ -69,15 +69,15 @@ class _ShopSetupScreenState extends State<ShopSetupScreen> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            const Text(
-              'Expiry Tracker',
-              style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+            Center(
+              child: Image.asset('assets/images/expiry_logo.png', height: 120),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
             Text(
               _join
                   ? 'Join the shared shop your team already uses.'
                   : 'Create a shared shop for your team.',
+              textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey.shade700),
             ),
             const SizedBox(height: 24),
